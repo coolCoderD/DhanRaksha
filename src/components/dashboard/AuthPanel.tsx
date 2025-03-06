@@ -1,17 +1,53 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Fingerprint, Scan, Shield, Smartphone, Key, Eye, Lock } from 'lucide-react';
+import { Fingerprint, Scan, Shield, Smartphone, Key, Eye, Lock, Camera, CheckCircle } from 'lucide-react';
+import * as faceapi from 'face-api.js';
 
 const AuthPanel = () => {
   const [authMethod, setAuthMethod] = useState('biometric');
   const [processingAuth, setProcessingAuth] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
   
+  useEffect(() => {
+    const startVideo = async () => {
+      if (authMethod === 'biometric') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            streamRef.current = stream;
+            
+            
+            setTimeout(() => setFaceDetected(true), 2000);
+          }
+        } catch (error) {
+          console.error('Error accessing webcam:', error);
+        }
+      } else {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+          setFaceDetected(false);
+        }
+      }
+    };
+    
+    startVideo();
+    
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [authMethod]);
+
   const handleAuthRequest = () => {
     setProcessingAuth(true);
-    // Simulate authentication process
     setTimeout(() => {
       setProcessingAuth(false);
     }, 2000);
@@ -30,7 +66,7 @@ const AuthPanel = () => {
       </CardHeader>
       
       <CardContent>
-        <Tabs defaultValue="biometric" className="w-full " onValueChange={setAuthMethod}>
+        <Tabs defaultValue="biometric" className="w-full" onValueChange={setAuthMethod}>
           <TabsList className="grid grid-cols-3  mb-4" >
             <TabsTrigger value="biometric" className="data-[state=active]:text-gold data-[state=active]:border-b-2 data-[state=active]:border-gold text-lg ">
               <Fingerprint className="h-4 w-4 mr-2" />
@@ -50,21 +86,50 @@ const AuthPanel = () => {
             <div className={`rounded-xl border border-gold/20 bg-navy-light/50 h-[30rem] w-full flex flex-col items-center justify-center ${processingAuth ? 'animate-pulse' : ''}`}>
               {authMethod === 'biometric' && (
                 <>
-                  <Scan className="h-12 w-12 text-gold mb-3" />
+                  <div className="relative w-4/5 max-w-md aspect-video bg-black rounded-lg overflow-hidden mb-4">
+                    <video 
+                      ref={videoRef} 
+                      className="w-full h-full object-cover mirror" 
+                      autoPlay 
+                      muted 
+                      playsInline
+                    ></video>
+                    
+                    {faceDetected && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        <svg className="w-full h-full" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="120" y="60" width="160" height="180" stroke="#00FFAA" strokeWidth="2" fill="none" />
+                          <circle cx="160" cy="120" r="5" fill="#00FFAA" />
+                          <circle cx="240" cy="120" r="5" fill="#00FFAA" />
+                          <path d="M160,170 Q200,200 240,170" stroke="#00FFAA" strokeWidth="2" fill="none" />
+                        </svg>
+                      </div>
+                    )}
+                    
+                    <div className="absolute top-4 left-4 flex items-center gap-2">
+                      <Camera className="h-4 w-4 text-gold" />
+                      <span className="text-xs bg-navy-dark/70 px-2 py-1 rounded-full">Facial Authentication</span>
+                    </div>
+                  </div>
+                  
                   <p className="text-lg text-center px-4">
-                    {processingAuth ? 'Analyzing biometric patterns...' : 'Position your face in the frame or place your finger on the sensor'}
+                    {faceDetected ? 'Face detected - Ready for authentication' : 'Position your face in the frame'}
                   </p>
                   
                   <div className="mt-4 flex gap-3">
                     <button
                       onClick={handleAuthRequest}
                       className="button-primary flex items-center gap-1 text-lg"
-                      disabled={processingAuth}
+                      disabled={processingAuth || !faceDetected}
                     >
                       <Fingerprint size={14} />
                       <span>Authenticate</span>
                     </button>
                   </div>
+                  
+                  <p className="text-xs text-foreground/50 mt-4">
+                    You can also use fingerprint sensor if available on your device
+                  </p>
                 </>
               )}
             </div>
